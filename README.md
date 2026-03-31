@@ -33,25 +33,33 @@ The installer will:
 2. Copy the skill to `~/.openclaw/skills/swiggy-agent/`
 3. Automatically configure `swiggy-food`, `swiggy-instamart`, and `swiggy-dineout` in `mcporter`.
 
-## Authentication
+## Authentication (Headless Playbook)
 
-You must authenticate each Swiggy domain you wish to use. Running these commands will open a browser window for Swiggy OAuth login:
+If you are running OpenClaw on a remote VM, you cannot simply click the OAuth link because the redirect goes to `127.0.0.1` on your remote machine. You must bridge the auth flow manually.
 
-```bash
-# For Groceries
-mcporter auth swiggy-instamart
+**Crucial Notes:**
+- Authenticating `swiggy-instamart` automatically covers `swiggy-food` (they share the same token).
+- `swiggy-dineout` requires its own separate authentication run.
 
-# For Food Delivery
-mcporter auth swiggy-food
-
-# For Restaurant Reservations
-mcporter auth swiggy-dineout
-```
-
-Verify it worked:
-```bash
-mcporter list
-```
+### The Step-by-Step Auth Process:
+1. **Start the auth flow in the background**
+   ```bash
+   mcporter auth swiggy-instamart
+   ```
+2. **Extract the Authorization URL**
+   Look in the terminal output for the URL starting with `https://mcp.swiggy.com/auth/authorize?...`
+3. **Open the URL on your local machine**
+   Copy that link and open it in your local browser. Log in with your phone number and OTP.
+4. **Copy the broken callback link**
+   After successful login, your browser will try to redirect to `127.0.0.1:PORT` and fail. **This is expected.** Copy the full `http://127.0.0.1:PORT/callback?code=...` URL from your browser's address bar.
+5. **Complete the loop on your remote VM**
+   Go back to your remote VM terminal and run a `curl` command using that exact URL (wrapped in quotes) to complete the OAuth loop:
+   ```bash
+   curl "http://127.0.0.1:PORT/callback?code=..."
+   ```
+6. **Verify and repeat**
+   Check that it says `Authorization successful`. Then, verify the tools are available using `mcporter list swiggy-instamart`.
+   Repeat this exact same process for `mcporter auth swiggy-dineout`.
 
 ## Usage
 
@@ -70,7 +78,7 @@ openclaw agent -m "Book a table for 2 at a nice sushi restaurant tonight at 8 PM
 
 ## Security
 
-No secrets are stored in this repository. All API keys and tokens live in `~/.openclaw/.env` and are managed securely by the OpenClaw environment. 
+No secrets are stored in this repository. All API keys and tokens live in `~/.mcporter/credentials.json` and are managed securely by the OpenClaw environment. 
 
 See [docs/SECURITY.md](docs/SECURITY.md) for the full security model.
 
