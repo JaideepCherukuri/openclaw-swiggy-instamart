@@ -1,0 +1,23 @@
+# Secrets — NEVER commit
+.env
+.env.*
+*.key
+*.pem
+
+# OpenClaw state (real config has secrets)
+openclaw.json
+!config/openclaw.example.json
+!config/.env.example
+
+# Logs & screenshots
+logs/
+screenshots/
+*.log
+*.jsonl
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/

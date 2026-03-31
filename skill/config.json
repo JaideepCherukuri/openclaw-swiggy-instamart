@@ -1,0 +1,6 @@
+{
+  "name": "order-eggs-chicken",
+  "description": "Add eggs and chicken to the Swiggy Instamart cart via MCP",
+  "tools": ["mcp:swiggy-instamart"],
+  "version": "1.0.0"
+}

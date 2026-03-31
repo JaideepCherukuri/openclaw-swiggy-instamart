@@ -1,0 +1,10 @@
+{
+  "$schema": "https://docs.openclaw.ai/config-schema.json",
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "groq/openai/gpt-oss-120b"
+      }
+    }
+  }
+}
