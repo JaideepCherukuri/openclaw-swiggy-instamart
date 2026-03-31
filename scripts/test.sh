@@ -33,7 +33,7 @@ echo ""
 echo "Note: You must manually run 'mcporter auth swiggy-food' (or instamart/dineout) to complete testing."
 echo "Running the Swiggy Agent in a dry-run test mode..."
 echo "---"
-RESULT=$(openclaw agent --agent main -m "Run the Swiggy Agent skill to search for pizzas on swiggy-food. Do NOT place an order. Tell me what you found." 2>&1)
+RESULT=$(openclaw agent --agent omi -m "Run the Swiggy Agent skill to search for pizzas on swiggy-food. Do NOT place an order. Tell me what you found." 2>&1)
 echo "$RESULT"
 echo "---"
 
