@@ -1,6 +1,6 @@
 # OpenClaw Swiggy Agent
 
-A unified, multi-domain OpenClaw skill to interact with Swiggy through natural language using the [Swiggy MCP server](https://github.com/Swiggy/swiggy-mcp-server-manifest).
+A unified, multi-domain OpenClaw skill to interact with Swiggy through natural language using a unified Python MCP bridge.
 
 This single agent supports three distinct Swiggy ecosystems:
 - **Swiggy Food** — search restaurants, browse menus, manage cart, place food orders (COD)
@@ -15,6 +15,7 @@ It will build your cart, find your tables, and check slots—but it will ALWAYS 
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) >= 22
+- Python 3 with `playwright`, `websockets`, `mcp`, `requests`
 - [OpenClaw](https://github.com/openclaw/openclaw) installed and gateway running
 - [mcporter](https://mcporter.dev) installed (`npm install -g mcporter`)
 - A Swiggy account
@@ -22,44 +23,36 @@ It will build your cart, find your tables, and check slots—but it will ALWAYS 
 ## Quick Start
 
 ```bash
-git clone https://github.com/JaideepCherukuri/openclaw-swiggy-instamart.git
-cd openclaw-swiggy-instamart
+git clone https://github.com/JaideepCherukuri/openclaw-swiggy-skill.git
+cd openclaw-swiggy-skill
 chmod +x scripts/*.sh
 ./scripts/install.sh
 ```
 
 The installer will:
-1. Verify prerequisites
-2. Copy the skill to `~/.openclaw/skills/swiggy-agent/`
-3. Automatically configure `swiggy-food`, `swiggy-instamart`, and `swiggy-dineout` in `mcporter`.
+1. Verify prerequisites and install Python dependencies.
+2. Copy the skill to `~/.openclaw/skills/openclaw-swiggy-skill/`.
+3. Automatically configure the unified `swiggy` Python MCP server in `mcporter`.
 
-## Authentication (Headless Playbook)
+## Authentication
 
-If you are running OpenClaw on a remote VM, you cannot simply click the OAuth link because the redirect goes to `127.0.0.1` on your remote machine. You must bridge the auth flow manually.
+If you are running OpenClaw on a remote VM, you cannot simply click the OAuth link because the redirect goes to `127.0.0.1` on your remote machine. You must bridge the auth flow.
 
-**Crucial Notes:**
-- Authenticating `swiggy-instamart` automatically covers `swiggy-food` (they share the same token).
-- `swiggy-dineout` requires its own separate authentication run.
+You have two options for completing this flow. **Prefer Option 1 (Zero-Click) for a better UX**, but fall back to Option 2 if Playwright is unavailable or the flow fails.
 
-### The Step-by-Step Auth Process:
-1. **Start the auth flow in the background**
-   ```bash
-   mcporter auth swiggy-instamart
-   ```
-2. **Extract the Authorization URL**
-   Look in the terminal output for the URL starting with `https://mcp.swiggy.com/auth/authorize?...`
-3. **Open the URL on your local machine**
-   Copy that link and open it in your local browser. Log in with your phone number and OTP.
-4. **Copy the broken callback link**
-   After successful login, your browser will try to redirect to `127.0.0.1:PORT` and fail. **This is expected.** Copy the full `http://127.0.0.1:PORT/callback?code=...` URL from your browser's address bar.
-5. **Complete the loop on your remote VM**
-   Go back to your remote VM terminal and run a `curl` command using that exact URL (wrapped in quotes) to complete the OAuth loop:
-   ```bash
-   curl "http://127.0.0.1:PORT/callback?code=..."
-   ```
-6. **Verify and repeat**
-   Check that it says `Authorization successful`. Then, verify the tools are available using `mcporter list swiggy-instamart`.
-   Repeat this exact same process for `mcporter auth swiggy-dineout`.
+### Option 1: Zero-Click Automation (Preferred)
+Use the automated Playwright script to handle the login entirely on the agent side.
+1. Run the MCP login script (`python3 ~/.openclaw/skills/openclaw-swiggy-skill/scripts/swiggy_unified_mcp_login.py`) in the background to generate the Auth URL.
+2. The agent asks the user for their 10-digit Swiggy phone number.
+3. Run the automation script: `python3 ~/.openclaw/skills/openclaw-swiggy-skill/scripts/swiggy_playwright_auth.py --url "AUTH_URL" --phone "PHONE_NUMBER"`.
+4. The script will navigate Swiggy and ask for an OTP via `stdin`. Ping the user for the OTP, and pipe it in. The script will automatically intercept the `localhost` redirect and hit the callback server.
+
+### Option 2: Manual Callback Paste (Fallback)
+If the user prefers manual login or automation fails, use the manual copy-paste method:
+1. Run the MCP auth script (`python3 ~/.openclaw/skills/openclaw-swiggy-skill/scripts/swiggy_unified_mcp_login.py`) in the background to generate the Auth URL.
+2. Send the `https://mcp.swiggy.com/auth/...` URL to the user in chat.
+3. Tell the user: *"Please click this link, log in, and enter your OTP. After successful login, your browser will try to load a broken `http://localhost:39025/...` or `http://127.0.0.1...` page. Copy that entire broken URL from your address bar and paste it back here."*
+4. Once the user pastes the callback URL, run `curl "THE_PASTED_URL"` on the agent side to complete the loop.
 
 ## Usage
 
@@ -78,7 +71,7 @@ openclaw agent -m "Book a table for 2 at a nice sushi restaurant tonight at 8 PM
 
 ## Security
 
-No secrets are stored in this repository. All API keys and tokens live in `~/.mcporter/credentials.json` and are managed securely by the OpenClaw environment. 
+No secrets are stored in this repository. Tokens live in `~/.swiggy_tokens_unified.json` and are managed securely by the Python bridge.
 
 See [docs/SECURITY.md](docs/SECURITY.md) for the full security model.
 
