@@ -1,50 +1,173 @@
 ---
-name: swiggy-agent
-description: Openclaw skill to place Swiggy orders through natural language using the Swiggy MCP. Supports Swiggy Food, Instamart, and Dineout.
+name: swiggy-agent-runtime
+description: Harden and evolve the Swiggy Telegram bot into a production-grade agent runtime. Use when designing or editing routing, planner/verifier logic, deterministic commerce workflows, tool-use policies, memory-commerce isolation, or runtime architecture for food, dineout, Instamart, memory, and utility turns.
 ---
 
-# Swiggy Agent
+# Swiggy Agent Runtime
 
-A unified OpenClaw skill to interact with Swiggy across Food, Instamart, and Dineout.
+Use this skill when working on the bot's execution model, not just one-off bug patches.
 
-## Domains & Capabilities
+Read `references/runtime-architecture.md` before major runtime changes.
 
-1. **Swiggy Food** (`swiggy-food`)
-   - Search restaurants, browse menus, manage cart, place food orders (COD).
-2. **Instamart** (`swiggy-instamart`)
-   - Search products, manage cart, place grocery orders (COD).
-3. **Dineout** (`swiggy-dineout`)
-   - Discover restaurants, check available slots, book tables (free bookings).
+## Core stance
 
-## ⚠️ STRICT RULES & SECURITY (CRITICAL) ⚠️
+Treat the bot as an agent runtime with layers, not as a single prompt with tools.
 
-1. **FINAL CONSENT REQUIRED:** DO NOT PLACE AN ORDER WITHOUT FINAL CONSENT. Explicitly ask the user for confirmation before calling any checkout, table booking, or order creation tools.
-2. **NO ACCIDENTAL ORDERS DURING TESTING:** Even during unit tests or debugging, you MUST NOT place an order.
-3. Use the `mcporter` CLI to interact with the respective MCP servers.
-   - Example Food: `mcporter call swiggy-food.<tool> ...`
-   - Example Instamart: `mcporter call swiggy-instamart.<tool> ...`
-   - Example Dineout: `mcporter call swiggy-dineout.<tool> ...`
-4. If authentication fails or expires, inform the user to re-authenticate using `mcporter auth <server_name>`.
+Default stack:
+1. route the turn
+2. short-circuit brittle deterministic flows
+3. let the model plan only inside the allowed lane
+4. execute tools with preserved structured state
+5. verify the reply against the user ask and tool evidence
 
-## Example Workflows
+## Use this workflow
 
-### Food Order Flow (Requires final confirmation)
-1. `mcporter call swiggy-food.get_addresses` to find the delivery address.
-2. `mcporter call swiggy-food.search_restaurants` based on user's query.
-3. `mcporter call swiggy-food.get_menu` to find items.
-4. `mcporter call swiggy-food.update_cart` to add items to the cart.
-5. **STOP and ask the user for confirmation.**
-6. Once confirmed: `mcporter call swiggy-food.checkout` (or equivalent tool).
+### 1. Classify the turn first
+Assign one dominant domain before changing tool behavior:
+- memory
+- utility
+- food exact
+- food broad
+- food menu follow-up
+- dineout broad
+- dineout booking follow-up
+- instamart search
+- instamart selection
+- smalltalk
+- general
 
-### Instamart Grocery Flow (Requires final confirmation)
-1. `mcporter call swiggy-instamart.get_addresses` to find the delivery address.
-2. `mcporter call swiggy-instamart.search_products` to find groceries.
-3. `mcporter call swiggy-instamart.update_cart` to add products to the cart.
-4. **STOP and ask the user for confirmation.**
-5. Once confirmed: `mcporter call swiggy-instamart.checkout` (or equivalent).
+If a turn is clearly `memory`, `utility`, or `smalltalk`, do not let stale commerce state hijack it.
 
-### Dineout Booking Flow (Requires final confirmation)
-1. `mcporter call swiggy-dineout.search_restaurants` to find places.
-2. `mcporter call swiggy-dineout.get_slots` to check availability for the requested time/pax.
-3. **STOP and ask the user for confirmation.**
-4. Once confirmed: `mcporter call swiggy-dineout.book_table` (or equivalent tool).
+### 2. Prefer deterministic control for brittle paths
+Do not hand these directly to the model loop unless there is no reliable controller:
+- exact restaurant or chain lookups
+- nearby brand asks
+- menu follow-ups
+- Instamart selection and quantity steps
+- stale Instamart reset on banter/greetings
+- dineout locality refinements
+- dineout booking follow-ups
+- time/date asks
+
+### 3. Keep state buckets separate
+Maintain separate buckets for:
+- memory
+- food
+- dineout
+- instamart
+- session meta
+
+Never let autobiographical memory answers depend on commerce workflow state.
+Never let casual chat resume an old cart or variant-selection flow.
+
+### 4. Add a verifier before reply
+Before shipping a reply, check:
+- did we answer the exact user ask?
+- if a brand was named, is the answer still scoped to that brand?
+- if we mention availability/open status, do we have tool evidence?
+- did we leak stale state from another domain?
+- are we returning a broad shortlist when the user asked for an exact entity?
+- **PRESENTATION CHECK (HARD RULE):** If showing food items, restaurants, or dineout options, does the message include ALL of the following?
+  1. Compressed Image attached via `media` (using ffmpeg)
+  2. Rating and Offers/Deals explicitly in the text
+  3. Actionable CTA Buttons (Add to Cart / Book a Table)
+  *Never send a naked text list if tool data contains images, deals, or actionable IDs.*
+
+### 5. Use the model narrowly
+The model should choose among valid actions in a known lane. Do not ask it to freestyle end-to-end workflow control for constrained commerce tasks.
+
+Good model-owned work:
+- soft paraphrase
+- ranking/explanation once candidate set is grounded
+- low-risk clarification questions
+- general chat outside deterministic flows
+
+Bad model-owned work:
+- exact entity resolution without guardrails
+- multi-turn variant selection
+- implicit state recovery after degraded tools
+- time/date answers
+- mixing memory recall with current commerce context
+
+### 6. Presentation Playbook (Formatting & UX)
+
+**CRITICAL EXECUTION NOTE:** You MUST strictly follow these formatting rules. A naked text-only list for restaurants or menu items is considered a failure. Never skip images, deals, or interactive buttons.
+
+Follow these strict rules when presenting options to the user:
+
+**A. Volume & Streaming:**
+- Always present at least **4-5 options** when the user asks for choices (unless fewer exist).
+- Do not dump all options into a single massive message block. **Stream them one by one** (send separate messages for each option) so the user can easily evaluate and interact with them natively.
+- **Suggestion Preferences:** When curating which options to surface, prefer restaurants that are **open**, prefer menu items that have **images** available, and prefer items that are **in stock**. (These are soft preferences, not hard filters; ignore them if the user specifically asks otherwise).
+- **Unavailable Items:** If the user asks for a specific item or restaurant and it is unavailable or out of stock, explicitly inform them and then immediately surface **relevant, available alternatives** instead.
+
+**B. Images & Compression:**
+- Always show options with images if the tool payload includes an image URL.
+- Before sending, download the image locally (`curl -s -o /tmp/img.png URL`) and compress it using `ffmpeg` to avoid API attachment limits (e.g., `ffmpeg -i /tmp/img.png -vf scale=800:-1 -q:v 8 /tmp/img_small.jpg -y`).
+- Only send the compressed version using the `media` parameter in the `message` tool. Never use `buffer` for file paths.
+
+**C. Essential Data (Ratings & Offers):**
+- **Food Menu Items:** Explicitly surface the rating alongside the item name and price.
+- **Restaurants & Dineout:** Explicitly display their overall rating and any active discount offers.
+
+**D. Channel-Agnostic CTA Buttons:**
+- Always include interactive Call-to-Action (CTA) elements mapped to the native platform. Do not restrict this to Telegram.
+- Use the `message` tool's `buttons` or `interactive` parameter. The gateway will automatically translate this into Telegram inline buttons, WhatsApp interactive lists, or Slack blocks.
+- For Food/Instamart items, include an "Add to Cart 🛒" button (e.g., `callback_data: "/add <id>"`).
+- For Dineout restaurants, include a "Book a Table 📅" button (e.g., `callback_data: "/book <id>"`).
+
+## OpenClaw Playbook: Headless Authentication & Login
+
+When an OpenClaw agent needs to authenticate to the Swiggy MCP servers (`swiggy-instamart`, `swiggy-food`, `swiggy-dineout`), the agent must bridge the headless OAuth flow. Since the agent runs on a remote VM, the `127.0.0.1` OAuth callback URL will fail to resolve on the user's local device.
+
+**Crucial Notes:**
+- Authenticating `swiggy-instamart` automatically covers `swiggy-food` (they share the same token).
+- `swiggy-dineout` requires its own separate authentication run.
+
+### The Step-by-Step Playbook for Agents:
+1. **Start the auth flow in the background**
+   Use `mcporter auth` combined with the `process` tool to keep it running:
+   ```bash
+   mcporter auth swiggy-instamart
+   ```
+2. **Extract the Authorization URL**
+   Use `process(action="log")` to read the background session's output. Look for the URL starting with `https://mcp.swiggy.com/auth/authorize?...`
+3. **Send the URL to the user**
+   Send a message to the user containing the link. 
+   *Crucial: Explicitly tell the user that after they log in and enter the OTP, the page will crash or redirect to a broken `127.0.0.1:PORT` link.*
+4. **Instruct the user to copy the broken link**
+   Ask the user to copy the full `http://127.0.0.1:PORT/callback?code=...` URL from their browser's address bar and paste it back to you in the chat.
+5. **Complete the loop via curl**
+   Once the user pastes the callback URL, run a `curl` command to that exact URL (wrapped in quotes) on the agent side to complete the OAuth loop:
+   ```bash
+   curl "http://127.0.0.1:PORT/callback?code=..."
+   ```
+6. **Verify and cleanup**
+   Check the `curl` output for `Authorization successful`. Then kill the background `mcporter` process, and verify the tools are available using `mcporter list swiggy-instamart`.
+7. **Repeat for Dineout**
+   Repeat the exact same process for `swiggy-dineout`.
+
+## Editing guidance
+
+When fixing a bug, prefer this order:
+1. identify the domain and failure seam
+2. decide whether it is router, controller, planner, executor, verifier, or state persistence
+3. patch the smallest correct layer
+4. add a regression test using the real runtime seam when possible
+5. verify live behavior after deploy
+
+Do not stack random heuristics if the real issue is missing architecture. If a heuristic is necessary, place it behind a named domain/controller rule and document why.
+
+## Expected outputs
+
+For architecture work, produce one or more of:
+- explicit router decision table
+- planner action schema
+- verifier checklist in code
+- extracted domain modules
+- regression tests for the exact failure path
+- state persistence fixes
+
+## Reference
+
+Use `references/runtime-architecture.md` for the target layering, state model, hard rules, and implementation order.
