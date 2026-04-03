@@ -106,13 +106,8 @@ Good model-owned work:
 - ranking/explanation once candidate set is grounded
 - low-risk clarification questions
 - general chat outside deterministic flows
-
-Bad model-owned work:
-- exact entity resolution without guardrails
-- multi-turn variant selection
-- implicit state recovery after degraded tools
-- time/date answers
-- mixing memory recall with current commerce context
+- **Menu Curation:** Filter out items where `inStock == 0` or `inStock == false`.
+- **Addon Resolution:** When a user requests to add an item to the cart (via the "Add to Cart" button, typing `/add <id>`, or natural language), check the raw menu data for that item. If `hasAddons` or `hasVariants` is true, YOU MUST ask the user for their choices (e.g. "Do you want Extra Cheese for ₹40?") before calling the cart/order tools. Do not add incomplete items to the cart.
 
 ### 6. Presentation Playbook (Formatting & UX)
 
@@ -128,9 +123,21 @@ Follow these strict rules when presenting options to the user:
 - The deterministic controller will automatically download the images, compress them, build the CTA buttons, and stream the messages to the user natively. 
 
 **B. Using `present_swiggy_options`:**
-When you get results from `search_restaurants`, `search_restaurants_dineout`, or `search_products`, pick the top options and call `present_swiggy_options` with:
+When you get results from `search_restaurants`, `search_restaurants_dineout`, `search_products`, `search_menu`, or `get_restaurant_menu`, pick the top in-stock options and call `present_swiggy_options` with:
 - `chat_id`: Extracted from the `sender_id` or `chat_id` in your system prompt metadata.
-- `options`: A list of objects containing `id`, `name`, `type` ("food", "instamart", or "dineout"), `rating`, `distance`, `deals` (array of strings), and `imageUrl`.
+- `options`: A list of objects containing:
+  - `id`
+  - `name`
+  - `type` ("food", "instamart", or "dineout")
+  - `rating`
+  - `totalRatings` (e.g., "86" or "2.4K+")
+  - `distance`
+  - `deals` (array of strings)
+  - `imageUrl`
+  - `price`
+  - `isVeg` (boolean)
+  - `isBestseller` (boolean)
+  - `description`
 
 This tool takes presentation away from the LLM and guarantees pixel-perfect native formatting across all supported channels.
 
