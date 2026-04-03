@@ -138,6 +138,7 @@ When you get results from `search_restaurants`, `search_restaurants_dineout`, `s
   - `isVeg` (boolean)
   - `isBestseller` (boolean)
   - `description`
+  - `addonsText` (string - extract real addons from tool responses and map them as a comma-separated list, e.g. "Extra Cheese, Extra Egg")
 
 This tool takes presentation away from the LLM and guarantees pixel-perfect native formatting across all supported channels.
 
