@@ -190,7 +190,8 @@ async def main():
                                     "isVeg": {"type": "boolean", "description": "True if item is vegetarian, false if non-veg"},
                                     "isBestseller": {"type": "boolean", "description": "True if item is a bestseller"},
                                     "totalRatings": {"type": "string", "description": "Number of ratings, e.g. '86' or '2.4K+'"},
-                                    "description": {"type": "string", "description": "Brief description of the item"}
+                                    "description": {"type": "string", "description": "Brief description of the item"},
+                                    "addonsText": {"type": "string", "description": "Comma-separated string of required/optional addons, e.g. 'cheese, double egg, mayo'"}
                                 },
                                 "required": ["id", "name", "type"]
                             }
@@ -268,6 +269,9 @@ async def main():
                     if opt.get("distance"): stats.append(f"📍 {opt['distance']}")
                     if stats:
                         lines.append(" • ".join(stats))
+                    
+                    if opt.get("addonsText"):
+                        lines.append(f"Add-on: {opt['addonsText']}")
                     
                     deals = opt.get("deals")
                     if deals and len(deals) > 0:
