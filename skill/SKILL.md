@@ -122,24 +122,17 @@ Follow these strict rules when presenting options to the user:
 
 **A. Volume & Streaming:**
 - Always present at least **4-5 options** when the user asks for choices (unless fewer exist).
-- Do not dump all options into a single massive message block. **Stream them one by one** (send separate messages for each option) so the user can easily evaluate and interact with them natively.
-- **Suggestion Preferences:** When curating which options to surface, prefer restaurants that are **open**, prefer menu items that have **images** available, and prefer items that are **in stock**. (These are soft preferences, not hard filters; ignore them if the user specifically asks otherwise).
-- **Unavailable Items:** If the user asks for a specific item or restaurant and it is unavailable or out of stock, explicitly inform them and then immediately surface **relevant, available alternatives** instead.
+- **CRITICAL:** Do NOT attempt to format the options as markdown text yourself!
+- ALWAYS use the native MCP tool `present_swiggy_options` provided by the server. 
+- You MUST pass your `chat_id` (from the incoming context metadata) and the exact array of options you want to show.
+- The deterministic controller will automatically download the images, compress them, build the CTA buttons, and stream the messages to the user natively. 
 
-**B. Images & Compression:**
-- Always show options with images if the tool payload includes an image URL.
-- Before sending, download the image locally (`curl -s -o /tmp/img.png URL`) and compress it using `ffmpeg` to avoid API attachment limits (e.g., `ffmpeg -i /tmp/img.png -vf scale=800:-1 -q:v 8 /tmp/img_small.jpg -y`).
-- Only send the compressed version using the `media` parameter in the `message` tool (e.g., `media: "/tmp/img_small.jpg"`). **NEVER use `buffer` with base64 interpolation (like `$(base64...)`) for images. The `buffer` field will drop the image.**
+**B. Using `present_swiggy_options`:**
+When you get results from `search_restaurants`, `search_restaurants_dineout`, or `search_products`, pick the top options and call `present_swiggy_options` with:
+- `chat_id`: Extracted from the `sender_id` or `chat_id` in your system prompt metadata.
+- `options`: A list of objects containing `id`, `name`, `type` ("food", "instamart", or "dineout"), `rating`, `distance`, `deals` (array of strings), and `imageUrl`.
 
-**C. Essential Data (Ratings & Offers):**
-- **Food Menu Items:** Explicitly surface the rating alongside the item name and price.
-- **Restaurants & Dineout:** Explicitly display their overall rating and any active discount offers.
-
-**D. Channel-Agnostic CTA Buttons:**
-- Always include interactive Call-to-Action (CTA) elements mapped to the native platform. Do not restrict this to Telegram.
-- Use the `message` tool's `buttons` or `interactive` parameter. The gateway will automatically translate this into Telegram inline buttons, WhatsApp interactive lists, or Slack blocks.
-- For Food/Instamart items, include an "Add to Cart 🛒" button (e.g., `callback_data: "/add <id>"`).
-- For Dineout restaurants, include a "Book a Table 📅" button (e.g., `callback_data: "/book <id>"`).
+This tool takes presentation away from the LLM and guarantees pixel-perfect native formatting across all supported channels.
 
 ## OpenClaw Playbook: Headless Authentication & Login
 

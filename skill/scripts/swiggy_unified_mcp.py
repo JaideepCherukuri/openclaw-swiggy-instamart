@@ -157,10 +157,90 @@ async def main():
                     if t.name not in tool_map:
                         tool_map[t.name] = name
                         all_tools.append(t)
+            
+            # Add native presentation tool
+            all_tools.append(types.Tool(
+                name="present_swiggy_options",
+                description="Present a formatted list of Swiggy options (Food/Instamart/Dineout) natively to the user with images and buttons. ALWAYS use this tool to show options instead of writing Markdown.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "chat_id": {"type": "string", "description": "The user's chat_id from the incoming context"},
+                        "options": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "string"},
+                                    "name": {"type": "string"},
+                                    "type": {"type": "string", "enum": ["food", "instamart", "dineout"]},
+                                    "rating": {"type": "string"},
+                                    "distance": {"type": "string"},
+                                    "deals": {"type": "array", "items": {"type": "string"}},
+                                    "imageUrl": {"type": "string"}
+                                },
+                                "required": ["id", "name", "type"]
+                            }
+                        }
+                    },
+                    "required": ["chat_id", "options"]
+                }
+            ))
             return all_tools
             
         @app.call_tool()
         async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+            if name == "present_swiggy_options":
+                import subprocess
+                import tempfile
+                import urllib.request
+                import json
+                
+                chat_id = arguments.get("chat_id")
+                options = arguments.get("options", [])
+                
+                for opt in options:
+                    media_arg = None
+                    img_url = opt.get("imageUrl")
+                    if img_url:
+                        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tf:
+                            try:
+                                req = urllib.request.Request(img_url, headers={'User-Agent': 'Mozilla/5.0'})
+                                with urllib.request.urlopen(req) as response, open(tf.name, 'wb') as out_file:
+                                    out_file.write(response.read())
+                                
+                                comp_path = tf.name + "_comp.jpg"
+                                subprocess.run(["ffmpeg", "-i", tf.name, "-vf", "scale=800:-1", "-q:v", "8", comp_path, "-y"], capture_output=True)
+                                media_arg = comp_path
+                            except Exception as e:
+                                pass
+                                
+                    lines = [f"**{opt.get('name', 'Unknown')}**"]
+                    if opt.get("rating"): lines.append(f"⭐ {opt['rating']}")
+                    if opt.get("distance"): lines[-1] += f" • 📍 {opt['distance']}"
+                    
+                    deals = opt.get("deals")
+                    if deals and len(deals) > 0:
+                        lines.append("🏷️ " + ", ".join(deals))
+                        
+                    text = "\n".join(lines)
+                    
+                    btn_type = opt.get("type", "food")
+                    if btn_type == "dineout":
+                        btn = {"text": "Book a Table 📅", "callback_data": f"/book {opt.get('id')}"}
+                    else:
+                        btn = {"text": "Add to Cart 🛒", "callback_data": f"/add {opt.get('id')}"}
+                        
+                    buttons_json = json.dumps([[btn]])
+                    
+                    cmd = ["openclaw", "message", "send", "--target", chat_id, "--message", text, "--buttons", buttons_json]
+                    if media_arg:
+                        cmd.extend(["--media", media_arg])
+                        
+                    subprocess.run(cmd)
+                    
+                return [types.TextContent(type="text", text=f"Successfully presented {len(options)} options via OpenClaw Gateway.")]
+
             if name not in tool_map:
                 raise ValueError(f"Tool {name} not found in any Swiggy endpoint")
             
