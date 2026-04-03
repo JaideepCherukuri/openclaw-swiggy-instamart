@@ -188,6 +188,8 @@ async def main():
                                     "imageUrl": {"type": "string"},
                                     "price": {"type": "string", "description": "Price of the item, e.g. 250 or ₹250"},
                                     "isVeg": {"type": "boolean", "description": "True if item is vegetarian, false if non-veg"},
+                                    "isBestseller": {"type": "boolean", "description": "True if item is a bestseller"},
+                                    "totalRatings": {"type": "string", "description": "Number of ratings, e.g. '86' or '2.4K+'"},
                                     "description": {"type": "string", "description": "Brief description of the item"}
                                 },
                                 "required": ["id", "name", "type"]
@@ -228,30 +230,33 @@ async def main():
                                 
                     lines = []
                     
-                    # 🟢 Veg / 🔴 Non-Veg tag
-                    if opt.get("type") in ["food", "instamart"]:
-                        veg_flag = opt.get("isVeg")
-                        if veg_flag is True:
-                            lines.append("🟢 Veg")
-                        elif veg_flag is False:
-                            lines.append("🔴 Non-Veg")
-
                     # Name and price
-                    title = f"**{opt.get('name', 'Unknown')}**"
+                    title_parts = []
+                    if opt.get("isBestseller"):
+                        title_parts.append("🔥 Bestseller")
+                    
+                    name_part = opt.get('name', 'Unknown')
                     if opt.get("price"):
                         price = opt['price']
                         if isinstance(price, (int, float)):
-                            title += f" (₹{price})"
+                            name_part += f" (₹{price})"
                         else:
-                            title += f" ({price})"
-                    lines.append(title)
+                            name_part += f" (₹{price})"
+                    
+                    title_parts.append(f"**{name_part}**")
+                    
+                    lines.append(" • ".join(title_parts))
                     
                     if opt.get("description"):
                         lines.append(f"_{opt['description']}_")
 
                     # Stats line
                     stats = []
-                    if opt.get("rating"): stats.append(f"⭐ {opt['rating']}")
+                    if opt.get("rating"): 
+                        rating_text = f"⭐ {opt['rating']}"
+                        if opt.get("totalRatings"):
+                            rating_text += f" ({opt['totalRatings']})"
+                        stats.append(rating_text)
                     if opt.get("distance"): stats.append(f"📍 {opt['distance']}")
                     if stats:
                         lines.append(" • ".join(stats))
