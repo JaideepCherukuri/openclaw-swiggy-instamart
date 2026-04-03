@@ -156,6 +156,14 @@ async def main():
                     # deduplicate by name
                     if t.name not in tool_map:
                         tool_map[t.name] = name
+                        
+                        # Strip misleading widget instructions from upstream
+                        if "interactive widget" in t.description:
+                            t.description = t.description.replace(
+                                "This tool call rendered an interactive widget in the chat. The user can already see the result — do not repeat it in text or with another visualization.",
+                                "IMPORTANT: After calling this tool, YOU MUST use the 'present_swiggy_options' tool to display the results to the user with images and buttons. Do NOT assume the user can see any widget natively."
+                            )
+                        
                         all_tools.append(t)
             
             # Add native presentation tool
@@ -177,7 +185,10 @@ async def main():
                                     "rating": {"type": "string"},
                                     "distance": {"type": "string"},
                                     "deals": {"type": "array", "items": {"type": "string"}},
-                                    "imageUrl": {"type": "string"}
+                                    "imageUrl": {"type": "string"},
+                                    "price": {"type": "string", "description": "Price of the item, e.g. 250 or ₹250"},
+                                    "isVeg": {"type": "boolean", "description": "True if item is vegetarian, false if non-veg"},
+                                    "description": {"type": "string", "description": "Brief description of the item"}
                                 },
                                 "required": ["id", "name", "type"]
                             }
@@ -215,9 +226,35 @@ async def main():
                             except Exception as e:
                                 pass
                                 
-                    lines = [f"**{opt.get('name', 'Unknown')}**"]
-                    if opt.get("rating"): lines.append(f"⭐ {opt['rating']}")
-                    if opt.get("distance"): lines[-1] += f" • 📍 {opt['distance']}"
+                    lines = []
+                    
+                    # 🟢 Veg / 🔴 Non-Veg tag
+                    if opt.get("type") in ["food", "instamart"]:
+                        veg_flag = opt.get("isVeg")
+                        if veg_flag is True:
+                            lines.append("🟢 Veg")
+                        elif veg_flag is False:
+                            lines.append("🔴 Non-Veg")
+
+                    # Name and price
+                    title = f"**{opt.get('name', 'Unknown')}**"
+                    if opt.get("price"):
+                        price = opt['price']
+                        if isinstance(price, (int, float)):
+                            title += f" (₹{price})"
+                        else:
+                            title += f" ({price})"
+                    lines.append(title)
+                    
+                    if opt.get("description"):
+                        lines.append(f"_{opt['description']}_")
+
+                    # Stats line
+                    stats = []
+                    if opt.get("rating"): stats.append(f"⭐ {opt['rating']}")
+                    if opt.get("distance"): stats.append(f"📍 {opt['distance']}")
+                    if stats:
+                        lines.append(" • ".join(stats))
                     
                     deals = opt.get("deals")
                     if deals and len(deals) > 0:
